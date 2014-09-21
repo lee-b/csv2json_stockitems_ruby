@@ -1,0 +1,48 @@
+#!/usr/bin/env ruby
+
+require_relative 'csv2json_ruby_lib'
+require 'test/unit'
+
+class Tests < Test::Unit::TestCase
+    def test_hash_raise()
+        input_hash = {
+            "grp_1_a" => 1,
+            "grp_1_b" => 2,
+            "grp_1_c" => 3,
+
+            "grp_2_a" => 4,
+            "grp_2_b" => 5,
+            "grp_2_c" => 6,
+
+            "grp_3_a" => 7,
+            "grp_3_b" => 8,
+            "grp_3_c" => 9
+        }
+
+        expected_output = {
+            "grp" => {
+                "1" => {
+                    "a" => 1,
+                    "b" => 2,
+                    "c" => 3
+                },
+                "2" =>  {
+                    "a" => 4,
+                    "b" => 5,
+                    "c" => 6
+                },
+                "3" => {
+                    "a" => 7,
+                    "b" => 8,
+                    "c" => 9
+                },
+            }
+        }
+
+        key_to_hash_pattern = /^(grp)_([0-9])_([a-c]+)$/
+        output = raise_keys_to_hashes(input_hash, key_to_hash_pattern)
+
+        assert_equal(output, expected_output)
+    end
+end
+
