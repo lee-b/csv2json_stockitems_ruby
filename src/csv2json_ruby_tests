@@ -125,10 +125,10 @@ class Tests < Test::Unit::TestCase
 
     def test_stockitem_mapper()
         input_row = {
-            "item_id" => "10",
+            "item id" => "10",
         }
         expected_output = {
-            "item_id" => 10,
+            "item id" => 10,
         }
         output = stockitem_mapper(input_row)
         assert_equal(expected_output, output)
