@@ -1,0 +1,150 @@
+#!/usr/bin/env ruby1.9.1
+
+require 'csv'
+require 'json'
+
+def exit_error(msg)
+        puts msg
+        exit 20
+end
+
+def do_stockitem_csv2json_conversion(srcCsvFname, dstJsonFname, row_mapper)
+    puts "Reading #{srcCsvFname}; outputting to #{dstJsonFname}"
+
+#    begin
+    	CSV.foreach(srcCsvFname, headers: true) do |csv_record|
+            json_row = row_mapper.call(csv_record)
+	    	puts json_row.to_json()
+        end
+
+#    rescue
+#        exit_error("IOError, couldn't complete the conversion")
+#    end
+end
+
+#
+# Take a dictionary with keys like:
+#
+#   groupname_1_fieldname:          "a",
+#   groupname_1_otherfieldname:     "b",
+#   groupname_2_fieldname:          "c",
+#   groupname_2_otherfieldname:     "d",
+#
+# and remap it to:
+#
+#   groupname: {
+#       "1" => {
+#           "fieldname":      ...
+#           "otherfieldname": ...
+#       },
+#       "2" => {
+#           "fieldname":      ...
+#           "otherfieldname": ...
+#       },
+#   }
+#
+def raise_keys_to_hashes(orig_dict, pattern, group_name_remapper = lambda { |x| x })
+    new_dict = {}
+
+    orig_dict.each { |k,v|
+        m = pattern.match(k)
+        if m
+            group_name = group_name_remapper.call(m[1])
+            group_idx = m[2]
+            group_idx_field = m[3]
+
+            puts "m is #{m.inspect}"
+            puts "group_name is #{group_name}; group_idx is #{group_idx}; group_idx_field is #{group_idx_field}"
+
+            if not new_dict.has_key?(group_name)
+                new_dict[group_name] = {}
+            end
+
+            if not new_dict[group_name].has_key?(group_idx)
+                new_dict[group_name][group_idx] = {}
+            end
+
+            new_dict[group_name][group_idx][group_idx_field] = v
+
+        else
+            new_dict[k] = v
+
+        end
+
+        break
+    }
+
+    return new_dict
+end
+
+def filter_empty_modifiers(mod_name, mod)
+    mod_fields.each { |k,v|
+        if k == "name" and v != "null"
+            add_mod = False
+        end
+    }
+
+    return True
+}
+
+
+def apply_lambdas_on_keys(orig_hash, key_to_lambda_map)
+    new_hash = {}
+
+    orig_hash.each { |k,v|
+        key_to_lamba_map.each{ |lmk,lmv|
+            if lmk.match(k)
+                mapper = key_to_lambda_map[k]
+
+                if mapper != nil
+                    new_hash[k] = mapper.call(v)
+                    puts "Mapped key '#{k}' (value '#{v}') to value #{new_hash[k]}"
+                else
+                    puts "Passing through key '#{k}' (value '#{v}')"
+                    new_hash[k] = v
+                end
+            end
+        }
+    }
+
+    return new_hash
+end
+
+def stockitem_mapper(row)
+    stockitem_mappings = {
+        /^item id$/   =>   lambda { |x| x.to_i }
+        /^modifier_[0-9]+_name$/   =>   lambda { |x| x == "nil" ? nil : x }
+    }
+
+    modifier_to_modifiers = lambda { |k| k == "modifier" ? "modifiers" : k }
+    key_to_hash_pattern = /(modifier)_([0-9]+)_([a-zA-Z_]+)/
+    type_converted_fields = apply_lambdas_on_keys(row, stockitem_mappings)
+    with_mod_dict = raise_keys_to_hashes(type_converted_fields, key_to_hash_pattern, group_name_remapper=modifier_to_modifiers)
+
+    new_mods = filter_empty_mods[
+
+    return with_mod_dict
+end
+
+def exit_usage(msg = nil)
+    if msg != nil
+        puts "\nERROR:\n\n\t#{msg}\n"
+    end
+
+    puts "\nUsage:\n\n\t#{$PROGRAM_NAME} srcCsvFname dstJsonFname\n\n"
+    exit 20
+end
+
+def main ()
+    srcCsvFname, dstJsonFname = ARGV
+
+    if dstJsonFname == nil
+        exit_usage "Not enough arguments given"
+    end
+
+    do_stockitem_csv2json_conversion(srcCsvFname, dstJsonFname, lambda { |r| stockitem_mapper(r) })
+    exit 0
+end
+
+main
+
