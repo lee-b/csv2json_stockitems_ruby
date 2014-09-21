@@ -4,6 +4,11 @@ require 'csv'
 require 'json'
 require 'logger'
 
+$JSON_BAD_NILS = true
+$JSON_BAD_CURRENCY = true
+
+require 'bigdecimal'
+
 $err_log = Logger.new(STDERR)
 $err_log.level = Logger::WARN
 
@@ -26,14 +31,14 @@ def do_stockitem_csv2json_conversion(srcCsvFname, dstJsonFname, row_mapper)
         end
 
         json_row = row_mapper.call(csv_record)
-	 	out_fp.write(json_row.to_json())
+	 	out_fp.write(JSON.pretty_generate(json_row))
 
         items_written += 1
     end
     out_fp.write("\n]\n")
 
-#rescue
-#    exit_error("IOError, couldn't complete the conversion")
+rescue => e
+    exit_error("IOError #{e}, couldn't complete the conversion")
 
 ensure
     out_fp.close()
@@ -73,8 +78,8 @@ def raise_keys_to_hashes(orig_dict, pattern, group_name_remapper = lambda { |x| 
             group_idx = m[2]
             group_idx_field = m[3]
 
-            puts "raise_keys_to_hashes: m matched; it is #{m.inspect}"
-            puts "group_name is #{group_name}; group_idx is #{group_idx}; group_idx_field is #{group_idx_field}"
+            $err_log.debug("raise_keys_to_hashes: m matched; it is #{m.inspect}")
+            $err_log.debug("group_name is #{group_name}; group_idx is #{group_idx}; group_idx_field is #{group_idx_field}")
 
             if not new_dict.has_key?(group_name)
                 new_dict[group_name] = {}
@@ -87,7 +92,7 @@ def raise_keys_to_hashes(orig_dict, pattern, group_name_remapper = lambda { |x| 
             new_dict[group_name][group_idx][group_idx_field] = v
 
         else
-            puts "raise_keys_to_hashes: key #{k} not matched; passing value #{v} through."
+            $err_log.debug("raise_keys_to_hashes: key #{k} not matched; passing value #{v} through.")
             new_dict[k] = v
 
         end
@@ -98,7 +103,15 @@ end
 
 def modifier_name_is_nil(mod_name, mod_fields)
     mod_fields.each { |k,v|
-        if k == "name" and v == nil
+        match = k == "name"
+
+        if $JSON_BAD_NILS
+            match &&= v == "nil"
+        else
+            match &&= v == nil
+        end
+
+        if match
             return true
         end
     }
@@ -111,43 +124,116 @@ def apply_matched_lambdas_on_keys(key_to_lambda_map, orig_hash)
     new_hash = {}
 
     orig_hash.each { |k,v|
-        key_to_lambda_map.each{ |lmk,lmv|
-            if lmk.match(k)
-                mapper = key_to_lambda_map[lmk]
+        catch :early_map_return do
+            key_to_lambda_map.each{ |lmk,lmv|
+                if lmk.match(k)
+                    mapper = key_to_lambda_map[lmk]
 
-                new_hash[k] = mapper.call(v)
-                puts "Mapped key '#{k}' (value '#{v}') to value #{new_hash[k]}"
-            else
-                puts "Passing through key '#{k}' (value '#{v}')"
-                new_hash[k] = v
-            end
-        }
+                    new_hash[k] = mapper.call(v)
+                    $err_log.debug("Mapped key '#{k}' (value '#{v}') to value '#{new_hash[k]}'")
+
+                    throw :early_map_return
+                end
+            }
+
+            $err_log.debug("Passing through key '#{k}' (value '#{v}')")
+            new_hash[k] = v
+        end
     }
 
     return new_hash
 end
 
+def csv_quantity_parser(quan_str)
+    if quan_str == "nil"
+        if $JSON_BAD_NILS == true
+            return "nil"
+        else
+            return nil
+        end
+    else
+        return quan_str.to_i
+    end
+end
+
+def csv_price_parser(price_str)
+    $err_log.debug("csv_price_parser(#{price_str}): called")
+    if price_str == nil
+        $err_log.debug("csv_price_parser(#{price_str}): returning nil")
+        if $JSON_BAD_NILS == true
+            return "nil"
+        else
+            return nil
+        end
+    end
+
+    is_neg = false
+
+    if price_str.start_with?("-")
+        $err_log.debug("csv_price_parser(#{price_str}): is negative")
+        is_neg = true
+        price_str = price_str[1..-1]
+    end
+
+    if price_str.start_with?("$")
+        $err_log.debug("csv_price_parser(#{price_str}): has dollar")
+        price_str = price_str[1..-1]
+    end
+
+    if $JSON_BAD_CURRENCY == true
+        val = price_str.to_f
+    else
+        val = BigDecimal.new(price_str)
+    end
+
+    if is_neg
+        val = -val
+    end
+
+    $err_log.debug("csv_price_parser(#{price_str}): returning val #{val.inspect}")
+    return val
+end
+
+def csv_string_parser(s)
+    if s == nil
+        if $JSON_BAD_NILS == true
+            return "nil"
+        else
+            return nil
+        end
+    else
+        return s
+    end
+end
+
 def stockitem_mapper(row)
     stockitem_mappings = {
         /^item id$/                 =>   lambda { |x| x.to_i },
-        /^modifier_[0-9]+_name$/    =>   lambda { |x| x == "nil" ? nil : x },
+        /^modifier_[0-9]+_name$/    =>   lambda { |x| csv_string_parser(x) },
+        /^price$/                   =>   lambda { |x| csv_price_parser(x) },
+        /^modifier_[0-9]+_price$/   =>   lambda { |x| csv_price_parser(x) },
+        /^cost$/                    =>   lambda { |x| csv_price_parser(x) },
+        /^quantity_on_hand$/        =>   lambda { |x| csv_quantity_parser(x) }
     }
 
     modifier_to_modifiers = lambda { |k| k == "modifier" ? "modifiers" : k }
     key_to_hash_pattern = /(modifier)_([0-9]+)_([a-zA-Z_]+)/
 
     type_converted_fields = apply_matched_lambdas_on_keys(stockitem_mappings, row)
-    puts "type_converted_fields are currently #{type_converted_fields.inspect}"
+    $err_log.debug("type_converted_fields are currently #{type_converted_fields.inspect}")
 
     final_dict = raise_keys_to_hashes(type_converted_fields, key_to_hash_pattern, group_name_remapper=modifier_to_modifiers)
 
-    puts "final_dict is currently #{final_dict.inspect}"
+    $err_log.debug("final_dict is currently #{final_dict.inspect}")
 
     if final_dict.has_key?('modifiers')
         final_dict['modifiers'].delete_if { |k,v| modifier_name_is_nil(k,v) }
     end
 
-    puts "final_dict is currently #{final_dict.inspect}"
+    $err_log.debug("final_dict is currently #{final_dict.inspect}")
+
+    $err_log.debug("final_dict.price is #{final_dict['price']}")
+    $err_log.debug("final_dict.cost is #{final_dict['cost']}")
 
     return final_dict
 end
