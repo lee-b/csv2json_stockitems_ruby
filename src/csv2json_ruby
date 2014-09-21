@@ -23,7 +23,7 @@ def main ()
         exit_usage("Not enough arguments given")
     end
 
-    csv2json_ruby_lib.do_stockitem_csv2json_conversion(srcCsvFname, dstJsonFname, lambda { |r| stockitem_mapper(r) })
+    do_stockitem_csv2json_conversion(srcCsvFname, dstJsonFname, lambda { |r| stockitem_mapper(r) })
     exit 0
 
 rescue IOError => e

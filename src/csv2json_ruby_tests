@@ -51,7 +51,7 @@ class Tests < Test::Unit::TestCase
         key_to_hash_pattern = /^(grp)_([0-9])_([a-c]+)$/
         output = raise_keys_to_hashes(input_hash, key_to_hash_pattern)
 
-        assert_equal(output, expected_output)
+        assert_equal(expected_output, output)
     end
 
     def test_hash_raise_with_group_mapping()
@@ -92,7 +92,46 @@ class Tests < Test::Unit::TestCase
         key_to_hash_pattern = /^(grp)_([0-9])_([a-c]+)$/
         output = raise_keys_to_hashes(input_hash, key_to_hash_pattern, group_name_remapper=lambda { |x| remap_grp_to_renamed_group(x) })
 
-        assert_equal(output, expected_output)
+        assert_equal(expected_output, output)
+    end
+
+    def test_modifier_name_is_nil_when_nil()
+        mod = {
+            "1" => {
+                "name" => "nil",
+                "price" => "1",
+            }
+        }
+
+        mod.each { |k,v|
+            res = modifier_name_is_nil(k, v)
+            assert_equal(true, res)
+        }
+    end
+
+    def test_modifier_name_is_nil_when_not_nil()
+        mod = {
+            "1" => {
+                "name" => "x",
+                "price" => "1",
+            }
+        }
+
+        mod.each { |k,v|
+            res = modifier_name_is_nil(k, v)
+            assert_equal(false, res)
+        }
+    end
+
+    def test_stockitem_mapper()
+        input_row = {
+            "item_id" => "10",
+        }
+        expected_output = {
+            "item_id" => 10,
+        }
+        output = stockitem_mapper(input_row)
+        assert_equal(expected_output, output)
     end
 end
 
