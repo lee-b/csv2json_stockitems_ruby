@@ -1,12 +1,14 @@
-#!/usr/bin/env ruby1.9.1
+#!/usr/bin/env ruby
 
 require_relative 'csv2json_ruby_lib'
 
+# exit immediately, with an error message
 def exit_error(msg)
         $err_log.error(msg)
         exit 20
 end
 
+# exit immediately, with usage information, and an optional error message
 def exit_usage(msg = nil)
     if msg != nil
         puts "\nERROR:\n\n\t#{msg}\n"
@@ -16,20 +18,26 @@ def exit_usage(msg = nil)
     exit 20
 end
 
-def main ()
+# top-level function
+def main()
+    # get filenames to use
     srcCsvFname, dstJsonFname = ARGV
 
+    # we need at least two, and dstJsonFname will only be set in that case
     if dstJsonFname == nil
         exit_usage("Not enough arguments given")
     end
 
+    # Run the conversion
     do_stockitem_csv2json_conversion(srcCsvFname, dstJsonFname, lambda { |r| stockitem_mapper(r) })
+
+    # exit with a success indication, if no error was raised
     exit 0
 
-rescue IOError => e
+rescue StandardError => e
     exit_error("IOError: #{e}.  Couldn't complete conversion process.")
 
 end
 
+# call main() to start the program
 main
-

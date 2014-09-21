@@ -1,1 +1,234 @@
+Contents
+========
 
+* Background
+* Overview
+* Main library code
+* Assumptions
+* More information
+
+
+Background
+==========
+
+I've previously submitted a Go-based CSV-to-JSON tool for this same test.
+
+That version was quite Go-like: OOP-focused, with strong typing, etc., with
+code re-used mainly in the sense of building a library which provides a
+good internal representation of StockItems.
+
+Since I've already demonstrated that approach, and Ruby is a more dynamic /
+functional language, I've taken a different approach here: functional
+programming, and code reuse at the data / container manipulation level.
+
+
+
+Overview
+========
+
+This code consists of 3 main files:
+
+* src/csv2json_ruby: wrapper code / front end utility library.  This simply
+  takes two arguments: the CSV file to read, and the JSON file to write.
+  [this file is also symlinked to bin/csv2json_ruby, for convenience, and
+  clarity about what to run]
+
+* src/csv2json_ruby_lib.rb: main code for loading/manipulating/saving
+  StockItem data.  This is largely the code I'll talk about below.
+
+* src/csv2json_ruby_tests: Tests for the code in csv2json_ruby_lib.rb
+
+
+
+Main library code
+=================
+
+The main library consists of the following functions:
+
+------------------------------------------------------------------------------
+
+def do_stockitem_csv2json_conversion(srcCsvFname, dstJsonFname, row_mapper)
+
+Does the overall work of converting a CSV file to a JSON file.
+
+ Takes 3 arguments:
+
+     srcCsvFname       The CSV file to read
+     dstJsonFname      The JSON file to create
+     row_mapper        This is a function which maps the input CSV row
+                       to a JSON object (dict, list, etc.) [see above]
+
+------------------------------------------------------------------------------
+
+def stockitem_mapper(row)
+
+  Main mapper function (for use with do_stockitem_csv2json_conversion(); see
+  below), which takes a CSV row and converts it to a JSON row.
+
+  NOTE
+
+    That, while relatively complex, this does pretty much all the conversion
+    necessary for a stock item, reusing code from elsewhere, in around 50
+    lines (many of which are comments, debug logging, etc.)
+
+    There are around 18 lines of actual code here, which do all the work of
+    importing stock items.  Adding other importers, for other types of item,
+    using this code as a base, would ONLY require a similar number of lines to
+    be added, along with some command-line tool which either chooses which
+    mapping function to call for a particular data type, or has been modified
+    with about 1 line of changes, to only process that datatype instead of
+    stock items.
+
+  NOTE ALSO
+
+    That the code below is largely declarative, defining mappings from field
+    names to converters, and a few pre-existing functions which do the
+    remaining steps necessary to complete the conversion.
+
+    As such, it would be relatively simple to abstract this further in future,
+    with configuration files defining the same steps that this function
+    currently performs, or that other functions would currently perform, for
+    other item types.
+
+------------------------------------------------------------------------------
+
+def raise_keys_to_hashes(
+  orig_dict, pattern, group_name_remapper = lambda { |x| x }
+):
+
+  Data / container manipulation function.  Takes a dictionary with keys like:
+
+   groupname_1_fieldname:          "a",
+   groupname_1_otherfieldname:     "b",
+   groupname_2_fieldname:          "c",
+   groupname_2_otherfieldname:     "d",
+
+  and remaps it to:
+
+   groupname: {
+       "1": {
+           "fieldname":      ...
+           "otherfieldname": ...
+       },
+       "2": {
+           "fieldname":      ...
+           "otherfieldname": ...
+       },
+   }
+
+  Also supports renaming groupnames, if a custom mapper function is provided
+
+------------------------------------------------------------------------------
+
+
+def collapse_indexed_hashes_to_list(indexed_hash)
+
+  Takes a dictionary like:
+
+  {
+    "1": {
+        "a": ...
+        "b": ...
+    },
+    "2": {
+        "a": ...
+        "b": ...
+    }
+  }
+
+  And converts it to a list like:
+
+  [
+    {
+        "a": ...
+        "b": ...
+    },
+    {
+        "a": ...
+        "b": ...
+    }
+  }
+
+
+------------------------------------------------------------------------------
+
+
+def apply_matched_lambdas_on_keys(key_to_lambda_map, orig_hash):
+
+  Takes one hash (aka hashset / map / dictionary), and copies it verbatim to
+  a new hash, EXCEPT where matching keys are found in the given
+  key_to_lambda_map.  For each matching key in key_to_lambda_map, the
+  associated value is treated as a function to call, which maps the old value
+  from the original hash (i.e., orig_hash[key]) to a new value in the new
+  hash (i.e., return_value[key])
+
+
+------------------------------------------------------------------------------
+
+
+Various simple helper functions:
+
+  def modifier_name_is_nil(mod_name, mod_fields)
+  def csv_quantity_parser(quan_str)
+  def csv_price_parser(price_str)
+  def csv_string_parser(s)
+
+
+
+
+Assumptions
+===========
+
+* The JSON output format specified in the test uses "nil", as a string,
+  instead of nulls, which JSON *does* support.  Since this doesn't fully make
+  use of JSON, and adds more compatibility / conversion code to all downstream
+  users, I think following this blindly would do more harm than good.  I
+  spelled out the exact choice to be made, and the reasons behind my preferred
+  choice in my previous (Go language) test.  For this one, however, I've
+  implemented a code-level variable which changes this behaviour.
+
+  When $USE_RELAXED_NULLS set to true, "nil" strings will be output, as in the
+  test's output specifications.
+
+  However, with USE_RELAXED_NULLS set to false, proper, JSON-compliant NULLs
+  will be output instead.
+
+* Its unclear whether "simply compliant" JSON is required as output, or if the
+  the test requires EXACTLY the same JSON format as given in the output
+  samples.  I have assumed that the actual layout and representation of the
+  JSON does matter much, so long as it's JSON, and conveys the same data.
+
+  In particular, I would have liked to use BigDecimals throughout, to avoid
+  floating point inaccuracies.  However, by default, Ruby's JSON serializer
+  interacts with BigDecimals to write numbers like "1.08E0", which IS compliant
+  JSON, but seems worryingly far from the output specified in the test
+  specification document.
+
+  So, as a workaround, I have made this configurable.  If you would like
+  super-accurate decimal fractions for currency, set:
+
+  $USE_RELAXED_CURRENCY = false
+
+  But bear in mind that this will produce numbers with exponents in them,
+  (such as 1.08E00) as mentioned above.
+
+  If, however, you would prefer simple floating point numbers which look
+  more like the example output, but may have accuracy problems, then you can
+  set:
+
+  $USE_RELAXED_CURRENCY = true
+
+* There seems to be a bug in Ruby's CSV generator, where it ignores :indent
+  and :space_before.  At least, I have them set as best I can figure out,
+  and it seems to do nothing, and I've seen others on StackOverflow saying
+  that this is buggy.  I figure it's "just formatting", either way, and
+  so, haven't spent too long trying to figure it out ( preferring to write
+  you these nice docs instead ;) )
+
+
+More information
+================
+
+* Please see the code for additional comments.
+* If you've any trouble running this code, please make sure your environment
+  is set up as per the Ruby versions mentioned in the README.txt file.
