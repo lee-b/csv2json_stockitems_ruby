@@ -17,6 +17,13 @@ For example:
     bin/csv2json_ruby test_scenarios/given_example/input.csv test_scenarios/given_example/output.json
 
 
+Or just run:
+
+    ./try_it.sh
+
+Which does the same thing.
+
+
 For detailed documentation of the code, assumptions made, etc., please
 refer to doc/overview.txt
 
