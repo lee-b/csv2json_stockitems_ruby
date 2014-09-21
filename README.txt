@@ -21,7 +21,7 @@ Or just run:
 
     ./try_it.sh
 
-Which does the same thing.
+Which does the same thing, but also wraps it in a bit of progress reporting, displays the output for you, etc.
 
 
 For detailed documentation of the code, assumptions made, etc., please
