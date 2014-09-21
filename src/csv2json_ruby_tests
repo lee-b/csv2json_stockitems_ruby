@@ -3,6 +3,15 @@
 require_relative 'csv2json_ruby_lib'
 require 'test/unit'
 
+
+def remap_grp_to_renamed_group(n)
+    if n == "grp"
+        return "renamed_group"
+    else
+        return n
+    end
+end
+
 class Tests < Test::Unit::TestCase
     def test_hash_raise()
         input_hash = {
@@ -41,6 +50,47 @@ class Tests < Test::Unit::TestCase
 
         key_to_hash_pattern = /^(grp)_([0-9])_([a-c]+)$/
         output = raise_keys_to_hashes(input_hash, key_to_hash_pattern)
+
+        assert_equal(output, expected_output)
+    end
+
+    def test_hash_raise_with_group_mapping()
+        input_hash = {
+            "grp_1_a" => 1,
+            "grp_1_b" => 2,
+            "grp_1_c" => 3,
+
+            "grp_2_a" => 4,
+            "grp_2_b" => 5,
+            "grp_2_c" => 6,
+
+            "grp_3_a" => 7,
+            "grp_3_b" => 8,
+            "grp_3_c" => 9
+        }
+
+        expected_output = {
+            "renamed_group" => {
+                "1" => {
+                    "a" => 1,
+                    "b" => 2,
+                    "c" => 3
+                },
+                "2" =>  {
+                    "a" => 4,
+                    "b" => 5,
+                    "c" => 6
+                },
+                "3" => {
+                    "a" => 7,
+                    "b" => 8,
+                    "c" => 9
+                },
+            }
+        }
+
+        key_to_hash_pattern = /^(grp)_([0-9])_([a-c]+)$/
+        output = raise_keys_to_hashes(input_hash, key_to_hash_pattern, group_name_remapper=lambda { |x| remap_grp_to_renamed_group(x) })
 
         assert_equal(output, expected_output)
     end
