@@ -20,6 +20,8 @@ def do_stockitem_csv2json_conversion(srcCsvFname, dstJsonFname, row_mapper)
 
     out_fp.write("[\n")
     CSV.foreach(srcCsvFname, headers: true) do |csv_record|
+        puts "Processing item #{items_written + 1}"
+
         if items_written > 0
             out_fp.write(",\n")
         end
@@ -92,6 +94,48 @@ def raise_keys_to_hashes(orig_dict, pattern, group_name_remapper = lambda { |x| 
     return new_dict
 end
 
+# Takes a dictionary like:
+#
+# {
+#    "1": {
+#        "a": ...
+#        "b": ...
+#    },
+#    "2": {
+#        "a": ...
+#        "b": ...
+#    }
+# }
+#
+# And converts it to a list like:
+#
+# [
+#    {
+#        "a": ...
+#        "b": ...
+#    },
+#    {
+#        "a": ...
+#        "b": ...
+#    }
+# }
+#
+# whilst respecting the sort order of keys
+#
+
+def collapse_indexed_hashes_to_list(indexed_hash)
+    res = []
+
+    keys = indexed_hash.keys()
+    keys.sort()
+
+    keys.each { |k|
+        res.push(indexed_hash[k])
+    }
+
+    return res
+end
+
 def modifier_name_is_nil(mod_name, mod_fields)
     mod_fields.each { |k,v|
         match = k == "name"
@@ -136,7 +180,7 @@ def apply_matched_lambdas_on_keys(key_to_lambda_map, orig_hash)
 end
 
 def csv_quantity_parser(quan_str)
-    if quan_str == "nil"
+    if quan_str == nil
         if $JSON_BAD_NILS == true
             return "nil"
         else
@@ -149,7 +193,7 @@ end
 
 def csv_price_parser(price_str)
     $err_log.debug("csv_price_parser(#{price_str}): called")
-    if price_str == nil
+    if price_str == "" or price_str == nil
         $err_log.debug("csv_price_parser(#{price_str}): returning nil")
         if $JSON_BAD_NILS == true
             return "nil"
@@ -219,6 +263,9 @@ def stockitem_mapper(row)
 
     if final_dict.has_key?('modifiers')
         final_dict['modifiers'].delete_if { |k,v| modifier_name_is_nil(k,v) }
+
+        new_mods = collapse_indexed_hashes_to_list(final_dict['modifiers'])
+        final_dict["modifiers"] = new_mods
     end
 
     $err_log.debug("final_dict is currently #{final_dict.inspect}")

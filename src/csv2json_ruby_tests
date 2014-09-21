@@ -153,22 +153,35 @@ class Tests < Test::Unit::TestCase
             "cost" => -0.8,
             "price_type" => "system",
             "quantity_on_hand" => 100000,
-            "modifiers" => {
-                "1" => {
+            "modifiers" => [
+                {
                   "name" => "Small",
                   "price" => "-0.25"
                 },
-                "2" => {
+                {
                   "name" => "Medium",
                   "price" => "0"
                 },
-                "3" => {
+                {
                   "name" => "Large",
                   "price" => "0.3"
                 }
-            }
+            ]
         }
         output = stockitem_mapper(input_row)
         assert_equal(output, expected_output)
     end
+
+    def test_collapsed_indexed_hashes_to_list()
+        inp_hash = {
+            "1" => { "a" => "z", "b" => "y" },
+            "2" => { "a" => "x", "b" => "w" }
+        }
+
+        expected_output = [
+            { "a" => "z", "b" => "y" },
+            { "a" => "x", "b" => "w" }
+        ]
+    end
 end
+
